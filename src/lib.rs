@@ -1,4 +1,4 @@
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum ChessPieceKind {
     Rook,
     Pawn,
@@ -51,14 +51,40 @@ fn get_op_col(col:ChessColour)->ChessColour{
         ChessColour::Black=>ChessColour::White,
     };
 }
+fn get_ep_capture_spots(col:ChessColour, board:ChessBoard)->u64{
+    let mut out:u64=0x00;
+    for piece in board.pieces{
+        if (piece.colour==col)&&(piece.kind==ChessPieceKind::Pawn){
+            if col==ChessColour::White{
+                if (piece.pos>>16)==(piece.prev_pos){
+                    out=out|(piece.pos>>8);
+                }
+            }
+            if col==ChessColour::Black{
+                if (piece.pos<<16)==(piece.prev_pos){
+                    out=out|(piece.pos<<8);
+                }
+            }
+        }
+    }
+    return out;
+}
 fn pawn_get_moves(piece: ChessPiece,board:ChessBoard)->u64{
     let mut out:u64=0x0;
     
     if piece.colour==ChessColour::White{
-        let capture_check:u64=((piece.pos<<7)|(piece.pos<<9))&get_piece_map(get_op_col(piece.colour), board);
+        let capture_check:u64=((piece.pos<<7)|(piece.pos<<9))&(get_piece_map(get_op_col(piece.colour), board)|get_ep_capture_spots(get_op_col(piece.colour),board));
+
         let normal_move_check:u64=(piece.pos<<8)&(!get_all_piece_map(board));
         let double_move_check:u64=((((0xFF00&piece.pos)<<8)&(!get_all_piece_map(board)))<<8)&(!get_all_piece_map(board));
-        
+        out=capture_check|normal_move_check|double_move_check;
+    }
+    else if piece.colour==ChessColour::Black{
+        let capture_check:u64=((piece.pos>>7)|(piece.pos>>9))&(get_piece_map(get_op_col(piece.colour), board)|get_ep_capture_spots(get_op_col(piece.colour),board));
+
+        let normal_move_check:u64=(piece.pos>>8)&(!get_all_piece_map(board));
+        let double_move_check:u64=((((0x00FF000000000000&piece.pos)>>8)&(!get_all_piece_map(board)))>>8)&(!get_all_piece_map(board));
+        out=capture_check|normal_move_check|double_move_check;
     }
     return out;
 }
@@ -77,7 +103,7 @@ fn get_rank(piece: ChessPiece)->u8{
 }
 fn get_file(piece: ChessPiece)->u8{
     if piece.is_captured {
-        return 0;
+            return 0;
     }
     let mut scanner = 0x8080808080808080;
     for file in 1..=8 {
