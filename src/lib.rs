@@ -8,7 +8,7 @@ enum ChessPieceKind {
     King,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum ChessColour {
     Black,
     White,
@@ -24,8 +24,43 @@ struct ChessPiece {
     is_captured: bool,
 }
 
+#[derive(Copy, Clone)]
 struct ChessBoard {
     pieces: [ChessPiece;32]
+}
+
+fn get_piece_map(col:ChessColour, board:ChessBoard)->u64{
+    let mut out:u64=0x00;
+    for piece in board.pieces{
+        if piece.colour!=col||piece.is_captured{continue;}
+        out=out|piece.pos;
+    }
+    return out;
+}
+fn get_all_piece_map(board:ChessBoard)->u64{
+    let mut out:u64=0x00;
+    for piece in board.pieces{
+        if piece.is_captured{continue;}
+        out=out|piece.pos;
+    }
+    return out;
+}
+fn get_op_col(col:ChessColour)->ChessColour{
+    return match col {
+        ChessColour::White=>ChessColour::Black,
+        ChessColour::Black=>ChessColour::White,
+    };
+}
+fn pawn_get_moves(piece: ChessPiece,board:ChessBoard)->u64{
+    let mut out:u64=0x0;
+    
+    if piece.colour==ChessColour::White{
+        let capture_check:u64=((piece.pos<<7)|(piece.pos<<9))&get_piece_map(get_op_col(piece.colour), board);
+        let normal_move_check:u64=(piece.pos<<8)&(!get_all_piece_map(board));
+        let double_move_check:u64=((((0xFF00&piece.pos)<<8)&(!get_all_piece_map(board)))<<8)&(!get_all_piece_map(board));
+        
+    }
+    return out;
 }
 fn get_rank(piece: ChessPiece)->u8{
     if piece.is_captured {
