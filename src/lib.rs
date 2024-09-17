@@ -107,18 +107,32 @@ fn get_ep_capture_spots(col:ChessColour, board:ChessBoard)->u64{
 
 }
 
+fn get_pawn_captures(piece: ChessPiece, _board:ChessBoard)->u64{
+    if piece.colour==ChessColour::White{
+        if get_file(piece)==1{return piece.pos<<7;}
+        if get_file(piece)==8{return piece.pos<<9;}
+        return (piece.pos<<7)|(piece.pos<<9);
+    } 
+    else if piece.colour==ChessColour::Black {
+        if get_file(piece)==1{return piece.pos>>9;}
+        if get_file(piece)==8{return piece.pos>>7;}
+        return (piece.pos>>7)|(piece.pos>>9);
+    }
+    return 0x0;
+}
+
 fn get_pawn_moves(piece: ChessPiece,board:ChessBoard)->u64{
     let mut out:u64=0x0;
     
     if piece.colour==ChessColour::White{
-        let capture_check:u64=((piece.pos<<7)|(piece.pos<<9))&(get_piece_map(get_op_col(piece.colour), board)|get_ep_capture_spots(get_op_col(piece.colour),board));
+        let capture_check:u64=get_pawn_captures(piece,board)&(get_piece_map(get_op_col(piece.colour), board)|get_ep_capture_spots(get_op_col(piece.colour),board));
 
         let normal_move_check:u64=(piece.pos<<8)&(!get_all_piece_map(board));
         let double_move_check:u64=((((0xFF00&piece.pos)<<8)&(!get_all_piece_map(board)))<<8)&(!get_all_piece_map(board));
         out=capture_check|normal_move_check|double_move_check;
     }
     else if piece.colour==ChessColour::Black{
-        let capture_check:u64=((piece.pos>>7)|(piece.pos>>9))&(get_piece_map(get_op_col(piece.colour), board)|get_ep_capture_spots(get_op_col(piece.colour),board));
+        let capture_check:u64=get_pawn_captures(piece,board)&(get_piece_map(get_op_col(piece.colour), board)|get_ep_capture_spots(get_op_col(piece.colour),board));
 
         let normal_move_check:u64=(piece.pos>>8)&(!get_all_piece_map(board));
         let double_move_check:u64=((((0x00FF000000000000&piece.pos)>>8)&(!get_all_piece_map(board)))>>8)&(!get_all_piece_map(board));
@@ -127,24 +141,140 @@ fn get_pawn_moves(piece: ChessPiece,board:ChessBoard)->u64{
     return out;
 }
 
-fn get_pawn_captures(piece: ChessPiece, _board:ChessBoard)->u64{
-    if piece.colour==ChessColour::White{
-        return (piece.pos<<7)|(piece.pos<<9);
-    } 
-    else if piece.colour==ChessColour::Black {
-        return (piece.pos>>7)|(piece.pos>>9);
-    }
-    return 0x0;
-}
 
 fn get_knight_moves(piece: ChessPiece, board:ChessBoard)->u64{
-    return ((piece.pos>>6)|(piece.pos<<6)|(piece.pos>>10)|(piece.pos<<10)|(piece.pos>>15)|(piece.pos<<15)|(piece.pos>>17)|(piece.pos<<17))&(!get_piece_map(piece.colour,board));
+    let mut out:u64=0x00;
+    if get_file(piece)>=2{
+        out=out|(piece.pos<<17)|(piece.pos>>15);
+        if get_file(piece)>=3{
+            out=out|(piece.pos>>6)|(piece.pos<<10);
+        }
+    }
+    if get_file(piece)<=7{
+        out=out|(piece.pos>>17)|(piece.pos<<15);
+        if get_file(piece)<=6{
+            out=out|(piece.pos>>10)|(piece.pos<<6);
+        }
+    }
+    return out&(!get_piece_map(piece.colour,board));
 }
 fn get_rook_moves(piece: ChessPiece, board:ChessBoard)->u64{
-    todo!("Implement rook movement");
+    let capturable:u64=get_piece_map(get_op_col(piece.colour), board);
+    let blockers:u64=get_piece_map(piece.colour, board);
+    let rank:u8=get_rank(piece);
+    let file:u8=get_file(piece);
+    let left_move_max=rank-1;
+    let right_move_max=8-rank;
+    let up_move_max=file-1;
+    let down_move_max=8-file;
+
+    let mut out:u64=0x00;
+    for offset in 1..=up_move_max{
+        if ((piece.pos<<(8*offset))&(!blockers))>0{
+            out=out|(piece.pos<<(8*offset));
+            if ((piece.pos<<(8*offset))&capturable)>0{
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    for offset in 1..=right_move_max{
+        if ((piece.pos>>(offset))&(!blockers))>0{
+            out=out|(piece.pos>>(offset));
+            if ((piece.pos>>(offset))&capturable)>0{
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    for offset in 1..=down_move_max{
+        if ((piece.pos>>(8*offset))&(!blockers))>0{
+            out=out|(piece.pos>>(8*offset));
+            if ((piece.pos>>(8*offset))&capturable)>0{
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    for offset in 1..=left_move_max{
+        if ((piece.pos<<(offset))&(!blockers))>0{
+            out=out|(piece.pos<<(offset));
+            if ((piece.pos<<(offset))&capturable)>0{
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    return out;
 }
 fn get_bishop_moves(piece:ChessPiece, board:ChessBoard)->u64{
-    todo!("Implement bishop movement");
+    
+    let capturable:u64=get_piece_map(get_op_col(piece.colour), board);
+    let blockers:u64=get_piece_map(piece.colour, board);
+    let rank:u8=get_rank(piece);
+    let file:u8=get_file(piece);
+    let left_move_max=rank-1;
+    let right_move_max=8-rank;
+    let up_move_max=file-1;
+    let down_move_max=8-file;
+    let ul_max=if up_move_max>left_move_max {left_move_max} else {up_move_max};
+    let dl_max=if down_move_max>left_move_max {left_move_max} else {down_move_max};
+    let ur_max=if up_move_max>right_move_max {right_move_max} else {up_move_max};
+    let dr_max=if down_move_max>right_move_max {right_move_max} else {down_move_max};
+    let mut out:u64=0x00;
+    for offset in 1..=ul_max{
+        if ((piece.pos<<(9*offset))&(!blockers))>0{
+            out=out|(piece.pos<<(9*offset));
+            if ((piece.pos<<(9*offset))&capturable)>0{
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    for offset in 1..=ur_max{
+        if ((piece.pos<<(7*offset))&(!blockers))>0{
+            out=out|(piece.pos<<(7*offset));
+            if ((piece.pos<<(7*offset))&capturable)>0{
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    for offset in 1..=dl_max{
+        if ((piece.pos>>(7*offset))&(!blockers))>0{
+            out=out|(piece.pos>>(7*offset));
+            if ((piece.pos>>(7*offset))&capturable)>0{
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    for offset in 1..=dr_max{
+        if ((piece.pos>>(9*offset))&(!blockers))>0{
+            out=out|(piece.pos>>(9*offset));
+            if ((piece.pos>>(9*offset))&capturable)>0{
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    return out;
 }
 fn get_queen_moves(piece:ChessPiece, board:ChessBoard)->u64{
     return get_bishop_moves(piece,board)|get_rook_moves(piece, board);
@@ -153,6 +283,12 @@ fn get_king_moves_colour(col:ChessColour, board:ChessBoard)->u64{
     for piece in board.pieces{
         if piece.colour!=col{continue;}
         if piece.kind!=ChessPieceKind::King{continue;}
+        if get_file(piece)==8{
+            return ((piece.pos>>8)|(piece.pos>>7)|(piece.pos<<1)|(piece.pos<<9)|(piece.pos<<8))&(!(get_piece_map(col,board)));
+        }
+        if get_file(piece)==1{
+            return ((piece.pos>>1)|(piece.pos>>9)|(piece.pos>>8)|(piece.pos<<8)|(piece.pos<<7))&(!(get_piece_map(col,board)));
+        }
         return ((piece.pos>>1)|(piece.pos>>9)|(piece.pos>>8)|(piece.pos>>7)|(piece.pos<<1)|(piece.pos<<9)|(piece.pos<<8)|(piece.pos<<7))&(!(get_piece_map(col,board)));
 
     }
@@ -176,7 +312,12 @@ fn get_capture_map_king_check(col:ChessColour,board:ChessBoard)->u64{
 }
 
 fn get_king_moves(piece: ChessPiece, board: ChessBoard)->u64{
-    return ((piece.pos>>1)|(piece.pos>>9)|(piece.pos>>8)|(piece.pos>>7)|(piece.pos<<1)|(piece.pos<<9)|(piece.pos<<8)|(piece.pos<<7))&(!(get_piece_map(piece.colour,board)|get_capture_map_king_check(get_op_col(piece.colour), board)));
+    let mut out:u64=(piece.pos>>8)|(piece.pos<<8);
+    let right_side:u64=(piece.pos>>1)|(piece.pos>>9)|(piece.pos<<7);
+    let left_side:u64=(piece.pos>>7)|(piece.pos<<1)|(piece.pos<<9);
+    if get_file(piece)!=1{out=out|left_side;}
+    if get_file(piece)!=8{out=out|right_side;}
+    return out&(!(get_piece_map(piece.colour,board)|get_capture_map_king_check(get_op_col(piece.colour), board)));
 }
 
 fn get_capture_map(col:ChessColour,board:ChessBoard)->u64{
@@ -207,30 +348,28 @@ fn get_long_castle_move(piece:ChessPiece, board:ChessBoard)->bool{
     if piece.has_moved{return false;}
     if is_checked(piece.colour,board){return false;}
     if piece.kind!=ChessPieceKind::King{return false}
-    if piece.colour==ChessColour::White{
-        let mut other_o:Option<ChessPiece>=get_piece_bit_mask(piece.pos<<4, board);
-        if other_o.is_none(){return false;}
-        let other:ChessPiece= other_o.take().unwrap();
-        if other.has_moved{return false;}
-        if other.kind!=ChessPieceKind::Rook{return false;}
-        let block_check_map=!(get_capture_map(get_op_col(piece.colour), board)|get_piece_map(piece.colour,board));
-        return ((((((piece.pos<<1)&block_check_map)<<1)&block_check_map)<<1)&block_check_map)>0;        
-        
-        
-    }
-    if piece.colour==ChessColour::Black{
-        let mut other_o:Option<ChessPiece>=get_piece_bit_mask(piece.pos>>4, board);
-        if other_o.is_none(){return false;}
-        let other:ChessPiece= other_o.take().unwrap();
-        if other.has_moved{return false;}
-        if other.kind!=ChessPieceKind::Rook{return false;}
-        let block_check_map=!(get_capture_map(get_op_col(piece.colour), board)|get_piece_map(piece.colour,board));
-        return ((((((piece.pos>>1)&block_check_map)>>1)&block_check_map)>>1)&block_check_map)>0;        
-    
-    }
-    return false;
+    let mut other_o:Option<ChessPiece>=get_piece_bit_mask(piece.pos<<4, board);
+    if other_o.is_none(){return false;}
+    let other:ChessPiece= other_o.take().unwrap();
+    if other.has_moved{return false;}
+    if other.kind!=ChessPieceKind::Rook{return false;}
+    let block_check_map=!(get_capture_map(get_op_col(piece.colour), board)|get_piece_map(piece.colour,board));
+    return ((((((piece.pos<<1)&block_check_map)<<1)&block_check_map)<<1)&block_check_map)>0;        
 }
 
+
+fn get_short_castle_move(piece:ChessPiece, board:ChessBoard)->bool{
+    if piece.has_moved{return false;}
+    if is_checked(piece.colour,board){return false;}
+    if piece.kind!=ChessPieceKind::King{return false}
+    let mut other_o:Option<ChessPiece>=get_piece_bit_mask(piece.pos>>3, board);
+    if other_o.is_none(){return false;}
+    let other:ChessPiece= other_o.take().unwrap();
+    if other.has_moved{return false;}
+    if other.kind!=ChessPieceKind::Rook{return false;}
+    let block_check_map=!(get_capture_map(get_op_col(piece.colour), board)|get_piece_map(piece.colour,board));
+    return ((((piece.pos>>1)&block_check_map)>>1)&block_check_map)>0;
+}
 
 
 fn get_colour_hash(col:ChessColour)->u8{
