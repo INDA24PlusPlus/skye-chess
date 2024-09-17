@@ -28,6 +28,26 @@ struct ChessPiece {
 struct ChessBoard {
     pieces: [ChessPiece;32]
 }
+impl ChessBoard{
+    fn move_piece(&mut self, from_c:u64, to_c:u64)->bool{
+        let mut other_o:Option<ChessPiece>=get_piece_bit_mask(from_c, *self);
+        if other_o.is_none(){return false;}
+        let piece:ChessPiece= other_o.take().unwrap();
+        if (to_c&get_moves(piece, *self))==0{return false;}
+        for mut piece_n in self.pieces{
+            piece_n.prev_pos=piece_n.pos;
+            if piece_n.pos==to_c{
+                piece_n.is_captured=true;
+            }
+            if piece_n.pos==from_c{
+                piece_n.pos=to_c;
+            }
+            
+        }
+        return true;
+    }
+}
+
 
 fn get_rank(piece: ChessPiece)->u8{
     if piece.is_captured {
@@ -427,6 +447,36 @@ fn get_file_u64(pos:u64)->u8{
     return 0;
 }
 
+fn get_u64_pos(rank:u8, file:u8)->u64{
+    return (0x1<<(8-file))<<(8*(8-rank));
+}
+
+fn get_moves(piece:ChessPiece, board:ChessBoard)->u64{
+    return match piece.kind{
+    ChessPieceKind::King=>get_king_moves(piece, board),
+    ChessPieceKind::Queen=>get_queen_moves(piece, board),
+    ChessPieceKind::Rook=>get_rook_moves(piece, board),
+    ChessPieceKind::Bishop=>get_bishop_moves(piece, board),
+    ChessPieceKind::Knight=>get_knight_moves(piece, board),
+    ChessPieceKind::Pawn=>get_pawn_moves(piece, board),
+    }
+}
+
+fn move_piece(mut board:ChessBoard, from_c:u64, to_c:u64)->(ChessBoard,bool){
+    let mut other_o:Option<ChessPiece>=get_piece_bit_mask(from_c, board);
+    if other_o.is_none(){return (board,false);}
+    let piece:ChessPiece= other_o.take().unwrap();
+    if (to_c&get_moves(piece, board))==0{return (board, false);}
+    let mut pieces=board.pieces;
+    for mut piece_n in pieces{
+        piece_n.prev_pos=piece_n.pos;
+        if piece_n.pos==from_c{
+            piece_n.pos=to_c;
+        }
+    }
+    board.pieces=pieces;
+    return (board, true);
+}
 #[cfg(test)]
 mod tests {
     use super::*;
