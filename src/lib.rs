@@ -88,6 +88,9 @@ fn pawn_get_moves(piece: ChessPiece,board:ChessBoard)->u64{
     }
     return out;
 }
+fn pawn_get_captures(piece: ChessPiece, board: ChessBoard){
+    if piece.colour
+}
 fn get_rank(piece: ChessPiece)->u8{
     if piece.is_captured {
         return 0;

@@ -1,3 +1,2 @@
 # skye-chess
-My chess lib, this is to test verification 2
-
+My chess lib, this is to test verification 3
