@@ -1,5 +1,5 @@
 #[derive(Copy, Clone, PartialEq)]
-enum ChessPieceKind {
+pub enum ChessPieceKind {
     Rook,
     Pawn,
     Knight,
@@ -9,7 +9,7 @@ enum ChessPieceKind {
 }
 
 #[derive(Copy, Clone, PartialEq)]
-enum ChessColour {
+pub enum ChessColour {
     Black,
     White,
 }
@@ -22,10 +22,9 @@ pub struct ChessPiece {
     kind: ChessPieceKind,
     has_moved: bool,
     is_captured: bool,
-    got_captured_now: bool;
 }
 
-fn get_rank(piece: ChessPiece)->u8{
+pub fn get_rank(piece: ChessPiece)->u8{
     if piece.is_captured {
         return 0;
     }
@@ -39,7 +38,7 @@ fn get_rank(piece: ChessPiece)->u8{
     return 0;
 }
 
-fn get_file(piece: ChessPiece)->u8{
+pub fn get_file(piece: ChessPiece)->u8{
     if piece.is_captured {
             return 0;
     }
@@ -97,9 +96,12 @@ impl ChessBoard{
         let mut other_o:Option<ChessPiece>=get_piece_bit_mask(from_c, *self);
         if other_o.is_none(){return false;}
         let piece:ChessPiece= other_o.take().unwrap();
+        if piece.colour!=self.current_move{return false;}
         if (to_c&get_moves(piece, *self))==0{return false;}
         for mut piece_n in self.pieces{
-            piece_n.prev_pos=piece_n.pos;
+            if piece_n.colour==self.current_move{
+                piece_n.prev_pos=piece_n.pos;
+            }
             if piece_n.pos==to_c{
                 piece_n.is_captured=true;
             }
@@ -113,6 +115,45 @@ impl ChessBoard{
         return true;
     }
 
+    fn simulate_move_piece(&mut self, from_c:u64, to_c:u64)->bool{
+        let mut other_o:Option<ChessPiece>=get_piece_bit_mask(from_c, *self);
+        if other_o.is_none(){return false;}
+        let piece:ChessPiece= other_o.take().unwrap();
+        if (to_c&get_moves(piece, *self))==0{return false;}
+        if piece.colour!=self.current_move{return false;}
+        for mut piece_n in self.pieces{
+            if piece_n.colour==self.current_move{
+                piece_n.prev_pos=piece_n.pos;
+            }
+            if piece_n.pos==from_c{
+                piece_n.pos=to_c;
+            }
+            
+        }
+                return true;
+    }
+    
+    fn revert_simulate_move_piece(&mut self)->bool{
+        for mut piece_n in self.pieces{
+            if piece_n.colour==self.current_move{
+                piece_n.pos=piece_n.prev_pos;
+            }
+                        
+        }
+        return true;
+    }
+
+    fn promote_piece(&mut self, pos_c:u64, n_kind:ChessPieceKind)->bool{
+        for mut piece in self.pieces{
+            if piece.kind!=ChessPieceKind::Pawn{continue;}
+            if piece.colour!=self.current_move{continue;}
+            if piece.pos!=pos_c{continue;}
+            if !can_promote(piece.pos, *self){continue;}
+            piece.kind=n_kind;
+            return true;
+        }
+        return false;
+    }
 }
 
 
@@ -469,7 +510,7 @@ fn get_file_u64(pos:u64)->u8{
     return 0;
 }
 
-fn get_u64_pos(rank:u8, file:u8)->u64{
+pub fn get_u64_pos(rank:u8, file:u8)->u64{
     return (0x1<<(8-file))<<(8*(8-rank));
 }
 
@@ -483,14 +524,27 @@ pub fn get_moves(piece:ChessPiece, board:ChessBoard)->u64{
     ChessPieceKind::Pawn=>get_pawn_moves(piece, board),
     }
 }
-pub fn can_promote(piece:ChessPiece, board:ChessBoard)->bool{
-    let mut other_o:Option<ChessPiece>=get_piece_bit_mask(from_c, board);
-    if other_o.is_none(){return (board,false);}
+pub fn can_promote(pos:u64, board:ChessBoard)->bool{
+    let mut other_o:Option<ChessPiece>=get_piece_bit_mask(pos, board);
+    if other_o.is_none(){return false;}
     let piece:ChessPiece= other_o.take().unwrap();
     if piece.kind!=ChessPieceKind::Pawn{return false;}
     if piece.colour==ChessColour::Black{return (piece.pos&0xFF)>0;}
     return (piece.pos&0xFF00000000000000)>0;
 
+}
+
+fn simulate_pice_moves_check(mut board:ChessBoard, piece:ChessPiece)->bool{
+    let mut scanner:u64=0x01;
+    let board_state:[u8;64]=[0;64];
+    for mut square in board_state {
+        let mut piece_opt=get_piece_bit_mask(scanner,board);
+        if piece_opt.is_none(){square=0b0;continue;}
+        let piece:ChessPiece= piece_opt.take().unwrap();
+        square=((get_piece_hash(piece.kind)<<3)|get_colour_hash(piece.colour)<<1)|get_colour_hash(board.current_move);
+        scanner=scanner<<1;
+    }
+    panic!("Add this shit");
 }
 
 pub fn move_piece(mut board:ChessBoard, from_c:u64, to_c:u64)->(ChessBoard,bool){
