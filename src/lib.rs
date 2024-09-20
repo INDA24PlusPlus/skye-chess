@@ -16,12 +16,12 @@ pub enum ChessColour {
 
 #[derive(Copy, Clone)]
 pub struct ChessPiece {
-    pos:u64,
-    prev_pos: u64,
-    colour: ChessColour,
-    kind: ChessPieceKind,
-    has_moved: bool,
-    is_captured: bool,
+    pub pos:u64,
+    pub prev_pos: u64,
+    pub colour: ChessColour,
+    pub kind: ChessPieceKind,
+    pub has_moved: bool,
+    pub is_captured: bool,
 }
 
 pub fn get_rank(piece: ChessPiece)->u8{
