@@ -52,6 +52,21 @@ pub fn get_file(piece: ChessPiece)->u8{
     return 0;
 }
 
+pub fn get_u64_pos(rank:u8, file:u8)->u64{
+    return (0x1<<(8-file))<<(8*(rank-1));
+}
+pub fn new_piece(rank: u8, file:u8, kind:ChessPieceKind, col:ChessColour)->ChessPiece{
+        let mut out:ChessPiece=ChessPiece{
+            pos: get_u64_pos(rank,file),
+            prev_pos: get_u64_pos(rank,file),
+            colour: col,
+            kind: kind,
+            has_moved:false,
+            is_captured:false,
+        };
+        return out;
+}
+
 fn get_colour_hash(col:ChessColour)->u8{
     return match col {
         ChessColour::White=>0b1,
@@ -86,10 +101,10 @@ fn hash_piece(piece: ChessPiece)->u16{
 
 #[derive(Copy, Clone)]
 pub struct ChessBoard {
-    pieces: [ChessPiece;32],
-    current_move: ChessColour,
-    rule_50_moves: u8,
-    rule_repetition: [[u8;64];50]
+    pub pieces: [ChessPiece;32],
+    pub current_move: ChessColour,
+    pub rule_50_moves: u8,
+    pub rule_repetition: [[u8;64];50]
 }
 impl ChessBoard{
     fn move_piece(&mut self, from_c:u64, to_c:u64)->bool{
@@ -104,12 +119,17 @@ impl ChessBoard{
             }
             if piece_n.pos==to_c{
                 piece_n.is_captured=true;
+                self.rule_50_moves=0;
             }
             if piece_n.pos==from_c{
                 piece_n.pos=to_c;
+                if piece_n.kind==ChessPieceKind::Pawn{
+                    self.rule_50_moves=0;
+                }
             }
             
         }
+        self.rule_repetition[self.rule_50_moves as usize]=hash_board_state(*self);
         self.rule_50_moves+=1;
         self.current_move=get_op_col(self.current_move);
         return true;
@@ -155,7 +175,56 @@ impl ChessBoard{
         return false;
     }
 }
-
+pub fn new_board()->ChessBoard{
+    let pieces_template:[(ChessColour, ChessPieceKind, u8, u8);32]=[
+        (ChessColour::White,ChessPieceKind::Rook,1,1),
+        (ChessColour::White,ChessPieceKind::Rook,1,8),
+        (ChessColour::White,ChessPieceKind::Knight,1,2),
+        (ChessColour::White,ChessPieceKind::Knight,1,7),
+        (ChessColour::White,ChessPieceKind::Bishop,1,3),
+        (ChessColour::White,ChessPieceKind::Bishop,1,6),
+        (ChessColour::White,ChessPieceKind::King,1,5),
+        (ChessColour::White,ChessPieceKind::Queen,1,4),
+        (ChessColour::White,ChessPieceKind::Pawn,2,1),
+        (ChessColour::White,ChessPieceKind::Pawn,2,2),
+        (ChessColour::White,ChessPieceKind::Pawn,2,3),
+        (ChessColour::White,ChessPieceKind::Pawn,2,4),
+        (ChessColour::White,ChessPieceKind::Pawn,2,5),
+        (ChessColour::White,ChessPieceKind::Pawn,2,6),
+        (ChessColour::White,ChessPieceKind::Pawn,2,7),
+        (ChessColour::White,ChessPieceKind::Pawn,2,8),
+        (ChessColour::Black,ChessPieceKind::Rook,8,1),
+        (ChessColour::Black,ChessPieceKind::Rook,8,8),
+        (ChessColour::Black,ChessPieceKind::Knight,8,2),
+        (ChessColour::Black,ChessPieceKind::Knight,8,7),
+        (ChessColour::Black,ChessPieceKind::Bishop,8,3),
+        (ChessColour::Black,ChessPieceKind::Bishop,8,6),
+        (ChessColour::Black,ChessPieceKind::King,8,5),
+        (ChessColour::Black,ChessPieceKind::Queen,8,4),
+        (ChessColour::Black,ChessPieceKind::Pawn,7,1),
+        (ChessColour::Black,ChessPieceKind::Pawn,7,2),
+        (ChessColour::Black,ChessPieceKind::Pawn,7,3),
+        (ChessColour::Black,ChessPieceKind::Pawn,7,4),
+        (ChessColour::Black,ChessPieceKind::Pawn,7,5),
+        (ChessColour::Black,ChessPieceKind::Pawn,7,6),
+        (ChessColour::Black,ChessPieceKind::Pawn,7,7),
+        (ChessColour::Black,ChessPieceKind::Pawn,7,8)
+    ];
+    let mut pieces:[ChessPiece;32]=[new_piece(1,1,ChessPieceKind::Pawn,ChessColour::White);32];
+    let mut idx=0;
+    for pie in pieces_template{
+        let (mut col,mut kind,mut c_file,mut c_rank)=pie;
+        pieces[idx]=new_piece(c_rank, c_file, kind, col);
+        idx+=1;
+    }
+    let mut out=ChessBoard{
+        pieces: pieces,
+        current_move: ChessColour::White,
+        rule_50_moves: 0,
+        rule_repetition: [[0;64];50]
+    };
+    return out;
+}
 
 
 fn get_piece_map(col:ChessColour, board:ChessBoard)->u64{
@@ -510,9 +579,7 @@ fn get_file_u64(pos:u64)->u8{
     return 0;
 }
 
-pub fn get_u64_pos(rank:u8, file:u8)->u64{
-    return (0x1<<(8-file))<<(8*(8-rank));
-}
+
 
 pub fn get_moves(piece:ChessPiece, board:ChessBoard)->u64{
     return match piece.kind{
