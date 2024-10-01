@@ -22,6 +22,7 @@ pub struct ChessPiece {
     pub kind: ChessPieceKind,
     pub has_moved: bool,
     pub is_captured: bool,
+    pub captured_now:bool,
 }
 
 pub fn get_rank(piece: ChessPiece)->u8{
@@ -63,6 +64,7 @@ pub fn new_piece(rank: u8, file:u8, kind:ChessPieceKind, col:ChessColour)->Chess
             kind: kind,
             has_moved:false,
             is_captured:false,
+            captured_now:false
         };
         return out;
 }
@@ -112,7 +114,7 @@ impl ChessBoard{
         if other_o.is_none(){return false;}
         let piece:ChessPiece= other_o.take().unwrap();
         if piece.colour!=self.current_move{return false;}
-        if (to_c&get_moves(piece, *self))==0{return false;}
+        if (to_c&filter_moves_check(piece, *self))==0{return false;}
         for mut piece_n in self.pieces{
             if piece_n.colour==self.current_move{
                 piece_n.prev_pos=piece_n.pos;
@@ -145,9 +147,14 @@ impl ChessBoard{
             if piece_n.colour==self.current_move{
                 piece_n.prev_pos=piece_n.pos;
             }
+            if piece_n.pos==to_c{
+                piece_n.is_captured=true;
+                piece_n.captured_now=true;
+            }
             if piece_n.pos==from_c{
                 piece_n.pos=to_c;
             }
+            
             
         }
                 return true;
@@ -157,6 +164,10 @@ impl ChessBoard{
         for mut piece_n in self.pieces{
             if piece_n.colour==self.current_move{
                 piece_n.pos=piece_n.prev_pos;
+            }
+            if piece_n.captured_now{
+                piece_n.is_captured=false;
+                piece_n.captured_now=false;
             }
                         
         }
@@ -591,6 +602,25 @@ pub fn get_moves(piece:ChessPiece, board:ChessBoard)->u64{
     ChessPieceKind::Pawn=>get_pawn_moves(piece, board),
     }
 }
+pub fn filter_moves_check(piece:ChessPiece, mut board:ChessBoard)->u64{
+    let mut moves:u64=0x00;
+    let mut scanner:u64=0x01;
+    let mut mvs=get_moves(piece, board); 
+    for a in 1..=64 {
+        let t_pos=mvs&scanner;
+        if t_pos>0{
+            board.simulate_move_piece(piece.pos, t_pos);
+            if !is_checked(piece.colour,board){
+                moves|=t_pos;
+            }
+            board.revert_simulate_move_piece();
+
+        }
+        scanner=scanner<<1;
+        
+    }
+    return moves;
+}
 pub fn can_promote(pos:u64, board:ChessBoard)->bool{
     let mut other_o:Option<ChessPiece>=get_piece_bit_mask(pos, board);
     if other_o.is_none(){return false;}
@@ -600,34 +630,13 @@ pub fn can_promote(pos:u64, board:ChessBoard)->bool{
     return (piece.pos&0xFF00000000000000)>0;
 
 }
-
-fn simulate_pice_moves_check(mut board:ChessBoard, piece:ChessPiece)->bool{
-    let mut scanner:u64=0x01;
-    let board_state:[u8;64]=[0;64];
-    for mut square in board_state {
-        let mut piece_opt=get_piece_bit_mask(scanner,board);
-        if piece_opt.is_none(){square=0b0;continue;}
-        let piece:ChessPiece= piece_opt.take().unwrap();
-        square=((get_piece_hash(piece.kind)<<3)|get_colour_hash(piece.colour)<<1)|get_colour_hash(board.current_move);
-        scanner=scanner<<1;
-    }
-    panic!("Add this shit");
+pub fn promote_piece(pos:u64, kind:ChessPieceKind, mut board:ChessBoard)->bool{
+    return board.promote_piece(pos, kind);
 }
 
-pub fn move_piece(mut board:ChessBoard, from_c:u64, to_c:u64)->(ChessBoard,bool){
-    let mut other_o:Option<ChessPiece>=get_piece_bit_mask(from_c, board);
-    if other_o.is_none(){return (board,false);}
-    let piece:ChessPiece= other_o.take().unwrap();
-    if (to_c&get_moves(piece, board))==0{return (board, false);}
-    let mut pieces=board.pieces;
-    for mut piece_n in pieces{
-        piece_n.prev_pos=piece_n.pos;
-        if piece_n.pos==from_c{
-            piece_n.pos=to_c;
-        }
-    }
-    board.pieces=pieces;
-    return (board, true);
+
+pub fn move_piece(mut board:ChessBoard, from_c:u64, to_c:u64)->bool{
+    return board.move_piece(from_c, to_c);
 }
 
 #[cfg(test)]
@@ -643,6 +652,7 @@ mod tests {
             kind: ChessPieceKind::Queen,
             has_moved:false,
             is_captured:false,
+            captured_now:false,
         };
         assert_eq!(get_rank(test_piece),7);
         assert_eq!(get_file(test_piece),4);
